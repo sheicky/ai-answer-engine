@@ -17,7 +17,6 @@ export default function Home() {
   const handleSend = async () => {
     if (!message.trim()) return;
 
-    // Add user message to the conversation
     const userMessage = { role: "user" as const, content: message };
     setMessages(prev => [...prev, userMessage]);
     setMessage("");
@@ -29,16 +28,26 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({
+          message: message,
+          messages: messages,
+          url: message.startsWith('http') ? message : null
+        }),
       });
 
-      // TODO: Handle the response from the chat API to display the AI response in the UI
+      if (!response.ok) {
+        throw new Error(`Error: ${response.status}`);
+      }
 
-
-
+      const data = await response.json();
+      setMessages(prev => [...prev, { 
+        role: "ai" as const, 
+        content: data.content || data.message || "No response received" 
+      }]);
 
     } catch (error) {
       console.error("Error:", error);
+      setMessages(prev => [...prev, { role: "ai" as const, content: "Oops! Something went wrong. Please try again later." }]);
     } finally {
       setIsLoading(false);
     }

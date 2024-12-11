@@ -33,34 +33,55 @@ async function scrapeWebsite(url: string) {
     await browser.close(); 
   }
 }
+
+type Message = {
+  role: "user" | "ai";
+  content: string;
+};
+
 // Applying the scraping to the chat request
 export async function POST(req: Request) {
   try {
-    const { messages, url } = await req.json();
-    let contextFromWeb = ''; 
+    const { message, messages, url } = await req.json();
+    
+    let contextFromWeb = '';
     if (url) {
-      contextFromWeb = await scrapeWebsite(url); 
+      try {
+        contextFromWeb = await scrapeWebsite(url);
+        if (contextFromWeb.length > 1000) {
+          contextFromWeb = contextFromWeb.substring(0, 1000) + '...';
+        }
+      } catch (error) {
+        console.error('Scraping error:', error);
+      }
     }
-    const messagesWithContext = contextFromWeb 
-      ? [...messages, { role: 'system', content: `Context from web: ${contextFromWeb}` }]
-      : messages;
 
     const completion = await client.chat.completions.create({
-      messages: messagesWithContext,
-      model: "llama3-70b-8192"
+      messages: [
+        { role: "system", content: "You are a helpful assistant." },
+        ...(contextFromWeb ? [{ role: "system", content: `Context: ${contextFromWeb}` }] : []),
+        ...messages.map((msg: Message) => ({
+          role: msg.role === "ai" ? "assistant" : "user",
+          content: msg.content
+        })),
+        { role: "user", content: message }
+      ],
+      model: "llama-3.1-70b-versatile",
+      temperature: 1,
+      max_tokens: 1000,
     });
 
     return Response.json({
       content: completion.choices[0].message.content,
     });
 
-
-  } catch (error: unknown) {
-    if (error instanceof Groq.APIError) {
-      return Response.json({ error: error.message }, { status: error.status });
-    }
+  } catch (error) {
     console.error('Error:', error);
-    return Response.json({ error: 'Internal server error' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return Response.json(
+      { error: 'Internal server error', details: errorMessage },
+      { status: 500 }
+    );
   }
 }
 
