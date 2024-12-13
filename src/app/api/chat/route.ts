@@ -12,6 +12,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ContentExtractor } from '@/services/ContentExtractor';
 import { Visualizer } from '@/services/Visualizer';
 import { WebCrawler } from '@/services/WebCrawler';
+import type { ChartConfiguration } from 'chart.js';
 // Implementing the chat API with Groq  
 
 /*
@@ -42,6 +43,8 @@ async function scrapeWebsite(url: string) {
   }
 }
 
+
+// Summarizing the text
 async function summarizeText(model: any, text: string) {
   try {
     const summaryPrompt = `Please summarize this text while keeping the important information (max 1000 characters): \n\n${text}`;
@@ -88,13 +91,16 @@ async function shouldCreateVisualization(content: string, data: any[] | undefine
   }
 }
 
+// Modifier le type Visualization
+type Visualization = ChartConfiguration;
+
 // Applying the scraping to the chat request
 export async function POST(req: Request) {
   try {
     const { message, messages, url } = await req.json();
     
     let contextFromWeb = '';
-    let visualizations = [];
+    let visualizations: Visualization[] = [];
 
     if (url) {
       try {
@@ -126,22 +132,40 @@ export async function POST(req: Request) {
     
     try {
       const prompt = [
-        `You are a helpful assistant. When providing answers, ensure to cite reliable
-         and verifiable sources. Use a conventional citation style by referring to 
-         sources with numbered references in the text (e.g., [1], [2]) and listing 
-         the corresponding sources at the end of your response. Strive for accuracy, clarity, 
-        and a professional tone in your writing. In your response, please make beautiful paragraphs.`,
+        `You are a helpful AI assistant. You must always sources the response you're giving.
+        You are a helpful assistant. When providing answers, ensure to cite reliable and verifiable sources. 
+        Use a conventional citation style by referring to sources with numbered references in the text (e.g., [1], [2])
+         and listing the corresponding sources at the end of your response as clickable links. 
+        Format your sources like this: "[1] <a href='URL' class='text-blue-500 hover:text-blue-600 underline'>Title or Description</a>"
+        Do not hesitate to give multiple sources if possible .
+        `,
         contextFromWeb ? `Context: ${contextFromWeb}` : "",
         ...messages.map((msg: Message) => `${msg.role}: ${msg.content}`),
         `user: ${message}`
-      ].join("\n");
+      ].join("\n\n");
 
       const result = await model.generateContent(prompt);
       const response = await result.response;
+      
+      // Format the response text
+      let formattedText = response.text()
+        .replace(/```(\w+)\n/g, '```$1\n') // Ensure proper code block formatting
+        .replace(/\n{3,}/g, '\n\n') // Remove excessive line breaks
+        .trim();
+
+      // Add spacing around headers
+      formattedText = formattedText.replace(/^(#{1,6} .+)$/gm, '\n$1\n');
 
       return Response.json({
-        content: response.text(),
+        content: formattedText,
+        visualizations: visualizations.length > 0 ? visualizations : undefined
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Allow-HTML': 'true'
+        }
       });
+
     } catch (error: any) {
       if (error.message?.includes('429') || error.message?.includes('quota')) {
         return Response.json(

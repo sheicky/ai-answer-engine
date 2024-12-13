@@ -15,20 +15,19 @@ const redis = new Redis({
 // Create separate rate limiters for different types of chats
 const mainRateLimit = new Ratelimit({
   redis,
-  limiter: Ratelimit.fixedWindow(2, '60 s'),
+  limiter: Ratelimit.fixedWindow(5, '60 s'),  // 5 requests per minute for main chats
   analytics: true,
   prefix: '@upstash/ratelimit/main',
 });
 
 const sharedRateLimit = new Ratelimit({
   redis,
-  limiter: Ratelimit.fixedWindow(2, '60 s'),
+  limiter: Ratelimit.slidingWindow(10, '60 s'),  // 10 requests per minute for shared chats
   analytics: true,
   prefix: '@upstash/ratelimit/shared',
 });
 
 export async function middleware(request: NextRequest) {
-  // Skip static files and blocked page
   if (request.nextUrl.pathname === '/blocked') {
     return NextResponse.next();
   }
@@ -38,14 +37,11 @@ export async function middleware(request: NextRequest) {
                request.headers.get("x-forwarded-for") ?? 
                '127.0.0.1';
 
-    // Check if this is a shared chat request and get chat ID
+    // Check if this is a shared chat request
     const isSharedChat = request.nextUrl.pathname.startsWith('/share/');
-    const chatId = isSharedChat 
-      ? request.nextUrl.pathname.split('/')[2] 
-      : 'main';
-
+    
     // Create unique identifiers for each user's chat session
-    const identifier = `${ip}:${chatId}`;
+    const identifier = `${ip}:${isSharedChat ? 'shared' : 'main'}`;
     
     // Use appropriate rate limiter based on chat type
     const limiter = isSharedChat ? sharedRateLimit : mainRateLimit;

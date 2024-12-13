@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react";
 import Sidebar from '@/components/Sidebar';
 import ShareModal from '@/components/ShareModal';
+import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 type Message = {
   role: "user" | "ai";
@@ -32,7 +35,7 @@ export default function Home() {
     }
     const initialChat = { 
       id: generateId(), 
-      messages: [{ role: "ai", content: "Hello! How can I help you today?" }],
+      messages: [{ role: "ai" as const, content: "Hello! How can I help you today?" }],
       createdAt: new Date()
     };
     return [initialChat];
@@ -50,7 +53,7 @@ export default function Home() {
   }
 
   const handleNewChat = () => {
-    const newChat = {
+    const newChat: Chat = {
       id: generateId(),
       messages: [{ role: "ai" as const, content: "Hello! How can I help you today?" }],
       createdAt: new Date()
@@ -174,6 +177,49 @@ export default function Home() {
     }
   };
 
+  const handleDeleteChat = async (chatId: string) => {
+    try {
+      const response = await fetch(`/api/shared-chat/${chatId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete chat');
+      }
+
+      // Immediately update state with remaining chats
+      const remainingChats = chats.filter(chat => chat.id !== chatId);
+      setChats(remainingChats);
+
+      // If we're deleting the current chat
+      if (chatId === currentChatId) {
+        if (remainingChats.length > 0) {
+          // Select the first chat from remaining chats
+          setCurrentChatId(remainingChats[0].id);
+        } else {
+          // If no chats remain, create a new one
+          const newChat = {
+            id: generateId(),
+            messages: [{ role: "ai" as const, content: "Hello! How can I help you today?" }],
+            createdAt: new Date()
+          };
+          setChats([newChat]);
+          setCurrentChatId(newChat.id);
+          // Update localStorage with new chat
+          localStorage.setItem('chats', JSON.stringify([newChat]));
+          return;
+        }
+      }
+
+      // Update localStorage with remaining chats
+      localStorage.setItem('chats', JSON.stringify(remainingChats));
+
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+      alert('Failed to delete chat. Please try again.');
+    }
+  };
+
   // TODO: Modify the color schemes, fonts, and UI as needed for a good user experience
   // Refer to the Tailwind CSS docs here: https://tailwindcss.com/docs/customizing-colors, and here: https://tailwindcss.com/docs/hover-focus-and-other-states
   return (
@@ -187,13 +233,27 @@ export default function Home() {
           createdAt: chat.createdAt.toISOString()
         }))}
         onSelectChat={handleSelectChat}
+        onDeleteChat={handleDeleteChat}
       />
       
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <div className="w-full bg-gray-800 border-b border-gray-700 p-4">
           <div className="max-w-3xl mx-auto flex justify-between items-center">
-            <h1 className="text-xl font-semibold text-white">Chat</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold text-white">Chat</h1>
+              <span className="text-sm text-gray-400">
+                - Made with <span className="text-red-500">❤️</span> by{" "}
+                <a 
+                  href="https://github.com/sheicky" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-blue-500 hover:text-blue-400"
+                >
+                  Sheick
+                </a>
+              </span>
+            </div>
             {currentChatId && (
               <button
                 onClick={handleShareChat}
@@ -223,11 +283,37 @@ export default function Home() {
                 <div
                   className={`px-4 py-2 rounded-2xl max-w-[80%] ${
                     msg.role === "ai"
-                      ? "bg-gray-800 border border-gray-700 text-gray-100"
+                      ? "bg-gray-800 border border-gray-700 text-gray-100 markdown-body"
                       : "bg-cyan-600 text-white ml-auto"
                   }`}
                 >
-                  {msg.content}
+                  {msg.role === "ai" ? (
+                    <ReactMarkdown
+                      components={{
+                        code({node, inline, className, children, ...props}) {
+                          const match = /language-(\w+)/.exec(className || '');
+                          return !inline && match ? (
+                            <SyntaxHighlighter
+                              style={atomDark}
+                              language={match[1]}
+                              PreTag="div"
+                              {...props}
+                            >
+                              {String(children).replace(/\n$/, '')}
+                            </SyntaxHighlighter>
+                          ) : (
+                            <code className={className} {...props}>
+                              {children}
+                            </code>
+                          );
+                        }
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  ) : (
+                    msg.content
+                  )}
                 </div>
               </div>
             ))}
@@ -275,6 +361,19 @@ export default function Home() {
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Add the signature */}
+        <div className="fixed bottom-0 right-0 p-2 text-sm text-gray-500">
+          Made with <span className="text-red-500">❤️</span> by{" "}
+          <a 
+            href="https://github.com/sheicky" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-blue-500 hover:text-blue-400"
+          >
+            Sheick
+          </a>
         </div>
       </div>
       

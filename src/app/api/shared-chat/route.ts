@@ -1,6 +1,17 @@
 import { Redis } from "@upstash/redis";
 
-// Add error handling for Redis initialization
+type Message = {
+  role: "user" | "ai";
+  content: string;
+};
+
+type Chat = {
+  id: string;
+  messages: Message[];
+  createdAt: Date;
+  isShared?: boolean;
+};
+
 let redis: Redis;
 try {
   redis = new Redis({
@@ -23,9 +34,23 @@ export async function PUT(request: Request) {
       return Response.json({ error: 'Invalid chat data' }, { status: 400 });
     }
 
-    // Store chat with expiration (e.g., 7 days)
-    await redis.set(`chat:${chat.id}`, chat);
-    return Response.json({ success: true });
+    // Create a clean chat object for sharing
+    const sharedChat: Chat = {
+      id: chat.id,
+      messages: chat.messages as Message[],
+      createdAt: new Date(),
+      isShared: true
+    };
+
+    // Store the stringified chat data
+    await redis.set(`chat:${chat.id}`, JSON.stringify(sharedChat), {
+      ex: 60 * 60 * 24 * 7 // 7 days expiration
+    });
+
+    return Response.json({ 
+      success: true,
+      sharedId: chat.id
+    });
   } catch (error) {
     console.error('Redis error:', error);
     return Response.json({ error: 'Failed to store chat' }, { status: 500 });
@@ -37,29 +62,33 @@ export async function GET(request: Request) {
     return Response.json({ error: 'Redis not configured' }, { status: 500 });
   }
 
-  const { searchParams } = new URL(request.url);
-  const chatId = searchParams.get('id');
+  const url = new URL(request.url);
+  const id = url.searchParams.get('id');
 
-  if (!chatId) {
+  if (!id) {
     return Response.json({ error: 'Chat ID is required' }, { status: 400 });
   }
 
   try {
-    const chatData = await redis.get(`chat:${chatId}`);
+    const chatData = await redis.get(`chat:${id}`);
+    
     if (!chatData) {
       return Response.json({ error: 'Chat not found' }, { status: 404 });
     }
 
-    // Set headers to prevent caching and keep connection alive
-    return new Response(JSON.stringify(typeof chatData === 'string' ? JSON.parse(chatData) : chatData), {
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-        'Connection': 'keep-alive'
+    // Handle different types of Redis responses
+    let parsedChat;
+    if (typeof chatData === 'string') {
+      try {
+        parsedChat = JSON.parse(chatData);
+      } catch {
+        parsedChat = chatData;
       }
-    });
+    } else {
+      parsedChat = chatData;
+    }
+
+    return Response.json(parsedChat);
   } catch (error) {
     console.error('Redis error:', error);
     return Response.json({ error: 'Failed to fetch chat' }, { status: 500 });
@@ -83,11 +112,14 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Chat not found' }, { status: 404 });
     }
 
-    const chat = typeof chatData === 'string' ? JSON.parse(chatData) : chatData;
+    const chat = JSON.parse(chatData.toString());
     chat.messages.push(message);
     
-    // Update with the same expiration
-    await redis.set(`chat:${chatId}`, chat);
+    // Update with stringified data and same expiration
+    await redis.set(`chat:${chatId}`, JSON.stringify(chat), {
+      ex: 60 * 60 * 24 * 7 // maintain 7 days expiration
+    });
+    
     return Response.json(chat);
   } catch (error) {
     console.error('Redis error:', error);

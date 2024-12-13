@@ -36,6 +36,8 @@ export default function SharedChat() {
     }
     return [];
   });
+  const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
+  const [editMessage, setEditMessage] = useState('');
 
   useEffect(() => {
     localStorage.setItem('shared_chats', JSON.stringify(chats));
@@ -107,14 +109,16 @@ export default function SharedChat() {
         body: JSON.stringify({
           message: message,
           messages: chat.messages,
-          chatId: chat.id
+          chatId: chat.id,
+          isSharedChat: true
         }),
       });
 
       if (!response.ok) {
         if (response.status === 429) {
           const resetTime = parseInt(response.headers.get('Retry-After') || '60');
-          window.location.href = `/blocked?reset=${resetTime}`;
+          localStorage.setItem('returnUrl', `/share/${chat.id}`);
+          window.location.href = `/blocked?reset=${resetTime}&returnUrl=${encodeURIComponent(`/share/${chat.id}`)}`;
           return;
         }
         throw new Error('Failed to send message');
@@ -136,6 +140,51 @@ export default function SharedChat() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleDeleteChat = async (chatId: string) => {
+    try {
+      await fetch(`/api/shared-chat/${chatId}`, {
+        method: 'DELETE',
+      });
+      setChats(prev => prev.filter(c => c.id !== chatId));
+      if (chatId === chat?.id) {
+        router.push('/share');
+      }
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+    }
+  };
+
+  const handleDeleteMessage = (index: number) => {
+    if (!chat) return;
+    
+    setChat(prev => {
+      if (!prev) return null;
+      const newMessages = [...prev.messages];
+      newMessages.splice(index, 1);
+      return { ...prev, messages: newMessages };
+    });
+  };
+
+  const handleEditMessage = (index: number) => {
+    if (!chat) return;
+    setEditingMessageId(index);
+    setEditMessage(chat.messages[index].content);
+  };
+
+  const handleSaveEdit = async (index: number) => {
+    if (!chat || !editMessage.trim()) return;
+    
+    setChat(prev => {
+      if (!prev) return null;
+      const newMessages = [...prev.messages];
+      newMessages[index] = { ...newMessages[index], content: editMessage };
+      return { ...prev, messages: newMessages };
+    });
+    
+    setEditingMessageId(null);
+    setEditMessage('');
   };
 
   if (!chat) {
@@ -169,6 +218,7 @@ export default function SharedChat() {
           createdAt: chat.createdAt
         }))}
         onSelectChat={handleSelectChat}
+        onDeleteChat={handleDeleteChat}
       />
 
       <div className="flex-1 flex flex-col">
@@ -188,6 +238,12 @@ export default function SharedChat() {
               </p>
             </div>
             <div className="flex gap-3">
+              <button
+                onClick={() => handleDeleteChat(chat.id)}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white text-sm transition-colors"
+              >
+                Delete Chat
+              </button>
               <button
                 onClick={handleNewChat}
                 className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white text-sm transition-colors"
@@ -217,14 +273,66 @@ export default function SharedChat() {
                   msg.role === "ai" ? "justify-start" : "justify-end flex-row-reverse"
                 }`}
               >
-                <div
-                  className={`px-4 py-2 rounded-2xl max-w-[80%] ${
-                    msg.role === "ai"
-                      ? "bg-gray-800 border border-gray-700 text-gray-100"
-                      : "bg-cyan-600 text-white"
-                  }`}
-                >
-                  {msg.content}
+                <div className="relative group">
+                  <div
+                    className={`px-4 py-2 rounded-2xl max-w-[80%] ${
+                      msg.role === "ai"
+                        ? "bg-gray-800 border border-gray-700 text-gray-100"
+                        : "bg-cyan-600 text-white"
+                    }`}
+                  >
+                    {editingMessageId === index ? (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={editMessage}
+                          onChange={(e) => setEditMessage(e.target.value)}
+                          className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => handleSaveEdit(index)}
+                          className="text-sm bg-green-600 px-2 py-1 rounded"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingMessageId(null)}
+                          className="text-sm bg-gray-600 px-2 py-1 rounded"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      msg.content
+                    )}
+                  </div>
+                  
+                  {/* Message Actions */}
+                  <div className="absolute top-0 right-full mr-2 hidden group-hover:flex items-center gap-1">
+                    {msg.role === "user" && (
+                      <>
+                        <button
+                          onClick={() => handleEditMessage(index)}
+                          className="p-1 hover:bg-gray-700 rounded"
+                          title="Edit message"
+                        >
+                          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteMessage(index)}
+                          className="p-1 hover:bg-gray-700 rounded"
+                          title="Delete message"
+                        >
+                          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
