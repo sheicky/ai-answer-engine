@@ -1,48 +1,122 @@
-<<<<<<< HEAD
-# AI Answer Engine
+# AI Answer Engine: Context-Aware Chat Interface with Web Scraping
 
-## Getting Started
+![image](https://github.com/user-attachments/assets/a7628c6d-e9b5-4f68-abc4-86dd2977c9ae)
 
-First, clone the repository and install the dependencies:
+
+## Project Overview
+
+AI Answer Engine is a sophisticated chat interface that leverages Large Language Models (LLMs) to provide context-aware responses with source citations. The system can process multiple URLs simultaneously, extract relevant information, and engage in meaningful conversations while maintaining proper attribution.
+
+### Key Features
+Users can:
+- Have a normal conversations with the model
+- Paste multiple URLs for context extraction
+- Ask questions and receive sourced answers
+- Share conversations via unique links
+- Continue shared conversations
+- View data visualizations when applicable
+
+## Tech Stack
+
+### Core Technologies
+- **Next.js 14**: App Router and Server Components
+- **Redis (Upstash)**: Rate limiting and data persistence
+- **Google Gemini AI**: Large Language Model integration
+- **Tailwind CSS**: Responsive UI design
+
+### Libraries and Tools
+- **Puppeteer**: Headless browser automation
+- **Cheerio**: HTML parsing and data extraction
+- **Chart.js**: Data visualization
+- **React Markdown**: Content rendering
+
+## Installation
+
+1. **Clone the repository**:
 ```bash
-git clone https://github.com/team-headstart/ai-answer-engine.git
-```
-
-Navigate to the project directory:
-```bash
+git clone https://github.com/yourusername/ai-answer-engine.git
 cd ai-answer-engine
 ```
 
-Then, install the dependencies:
-
+2. **Install dependencies**:
 ```bash
 npm install
 ```
 
-Then, run the development server:
+3. **Set up environment variables**:
+Create a `.env` file with:
+```env
+UPSTASH_REDIS_REST_URL=your_redis_url
+UPSTASH_REDIS_REST_TOKEN=your_redis_token
+GEMINI_API_KEY=your_gemini_api_key
+```
+
+4. **Run the development server**:
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Visit [http://localhost:3000](http://localhost:3000) to see the application.
 
-## Tasks
+## Project Structure
 
-- Take a look at the TODOs throughout the repo, namely:
+### Key Components
 
-    - `src/app/page.tsx`: Update the UI and handle the API response as needed
- 
-    - `src/app/api/chat/route.ts`: Implement the chat API with Groq and web scraping with Cheerio and Puppeteer
- 
-    - `src/middleware.ts`: Implement the code here to add rate limiting with Redis
+1. **UI Layer** (`src/app/page.tsx`)
+   - Chat interface implementation
+   - Real-time response handling
+   - State management
+   - Share functionality
+
+2. **API Layer** (`src/app/api/chat/route.ts`)
+   - LLM integration
+   - Web scraping implementation
+   - Data visualization generation
+   - Response formatting
+
+3. **Middleware** (`src/middleware.ts`)
+   - Rate limiting implementation
+   - Request validation
+   - Error handling
 
 
-## Learn More
+## Future Enhancements
 
-To learn more about Next.js, take a look at the following resources:
+1. **Extended Content Extraction**
+   - YouTube video transcription
+   - PDF document parsing
+   - CSV data processing
+   - Image analysis and OCR
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-=======
-# ai-answer-engine
->>>>>>> 191b514f67fb397b6cdaf0e37fd123fbe351fefb
+2. **Advanced Visualization**
+   - Interactive charts
+   - Custom visualization types
+   - Real-time data updates
+   - Export capabilities
+
+3. **Hierarchical Web Crawling**
+   - Deep link analysis
+   - Content relevance scoring
+   - Media link extraction
+   - Recursive crawling
+
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Demo
+
+Check out our video demo here: [YouTube Demo Link]
+
+---
+
+Built with ❤️ Sheick  using Next.js, Redis, and Google Gemini AI
