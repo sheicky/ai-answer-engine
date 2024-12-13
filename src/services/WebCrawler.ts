@@ -36,7 +36,7 @@ export class WebCrawler {
           pagesProcessed++;
 
           // Add new URLs to queue
-          result.links.forEach(link => {
+          result.links.forEach((link: string) => {
             if (!this.visited.has(link)) {
               this.queue.push(link);
             }

@@ -1,5 +1,8 @@
-import puppeteer from 'puppeteer';
+import type { Browser } from 'puppeteer';
+import * as puppeteer from 'puppeteer';
 import * as cheerio from 'cheerio';
+import ytdl from 'ytdl-core';
+import { createWorker } from 'tesseract.js';
 
 // Dynamic imports to handle missing dependencies gracefully
 const loadDependencies = async () => {
@@ -91,9 +94,12 @@ export class ContentExtractor {
   }
 
   private async extractPDF(url: string) {
+    const deps = await loadDependencies();
+    if (!deps.pdf) throw new Error('PDF parser not available');
+
     const response = await fetch(url);
     const buffer = await response.arrayBuffer();
-    const data = await pdf(buffer);
+    const data = await deps.pdf.default(buffer);
 
     return {
       content: data.text,
@@ -108,12 +114,15 @@ export class ContentExtractor {
   }
 
   private async extractCSV(url: string) {
+    const deps = await loadDependencies();
+    if (!deps.csv) throw new Error('CSV parser not available');
+
     const response = await fetch(url);
     const text = await response.text();
     const records: any[] = [];
 
     await new Promise((resolve) => {
-      csv.parse(text, {
+      deps.csv.parse(text, {
         columns: true,
         skip_empty_lines: true,
       })
@@ -129,25 +138,21 @@ export class ContentExtractor {
       },
       links: [],
       mediaUrls: [],
-      data: records, // For visualizations
-      data: undefined
+      data: records
     };
   }
 
   private async extractImage(url: string) {
-    const worker = await createWorker();
-    await worker.loadLanguage('eng');
-    await worker.initialize('eng');
-    
-    const { data: { text } } = await worker.recognize(url);
+    const deps = await loadDependencies();
+    if (!deps.tesseract) throw new Error('OCR not available');
+
+    const worker = await deps.tesseract.createWorker();
+    const { data } = await worker.recognize(url);
     await worker.terminate();
 
     return {
-      content: text,
-      metadata: {
-        type: 'image',
-        url,
-      },
+      content: data.text,
+      metadata: { type: 'image', url },
       links: [],
       mediaUrls: [url],
       data: undefined
@@ -195,6 +200,40 @@ export class ContentExtractor {
       mediaUrls: Array.from(mediaUrls),
       data: undefined
     };
+  }
+
+  private async getYouTubeCaptions(info: any) {
+    try {
+      const captions = info.player_response.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+      if (!captions?.length) return '';
+      
+      const caption = captions[0];
+      const response = await fetch(caption.baseUrl);
+      return await response.text();
+    } catch (error) {
+      console.error('Error getting captions:', error);
+      return '';
+    }
+  }
+
+  private formatTranscript(captionText: string): string {
+    return captionText
+      .replace(/<[^>]*>/g, '')  // Remove XML/HTML tags
+      .replace(/\n\n/g, '\n')   // Remove double line breaks
+      .trim();
+  }
+
+  private extractLinksFromText(text: string): string[] {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return Array.from(text.match(urlRegex) || []);
+  }
+
+  private formatCSVContent(records: any[]): string {
+    return records.map(record => 
+      Object.entries(record)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join(', ')
+    ).join('\n');
   }
 
   // Helper methods...

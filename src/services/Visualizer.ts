@@ -44,5 +44,58 @@ export class Visualizer {
     };
   }
 
-  // Implement other chart types...
+  private createLineChart(data: any[], options: any): ChartConfiguration {
+    return {
+      type: 'line',
+      data: {
+        labels: data.map(item => item[options.xAxis]),
+        datasets: [{
+          label: options.yAxis || '',
+          data: data.map(item => item[options.yAxis || options.xAxis]),
+          borderColor: 'rgb(54, 162, 235)',
+          tension: 0.1
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: !!options.title,
+            text: options.title || '',
+          }
+        }
+      }
+    };
+  }
+
+  private createPieChart(data: any[], options: any): ChartConfiguration {
+    return {
+      type: 'pie',
+      data: {
+        labels: data.map(item => item[options.xAxis]),
+        datasets: [{
+          data: data.map(item => item[options.yAxis || options.xAxis]),
+          backgroundColor: [
+            'rgba(255, 99, 132, 0.5)',
+            'rgba(54, 162, 235, 0.5)',
+            'rgba(255, 206, 86, 0.5)',
+          ],
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: !!options.title,
+            text: options.title || '',
+          }
+        }
+      }
+    };
+  }
+
+  private createHistogram(data: any[], options: any): ChartConfiguration {
+    // Implement histogram logic here
+    return this.createBarChart(data, options); // Fallback to bar chart for now
+  }
 } 

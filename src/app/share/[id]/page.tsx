@@ -10,7 +10,7 @@ type Message = {
   content: string;
 };
 
-type SharedChat = {
+type Chat = {
   id: string;
   messages: Message[];
   createdAt: string | Date;
@@ -19,7 +19,8 @@ type SharedChat = {
 export default function SharedChat() {
   const router = useRouter();
   const params = useParams();
-  const [chat, setChat] = useState<SharedChat | null>(null);
+  const chatId = typeof params.id === 'string' ? params.id : null;
+  const [chat, setChat] = useState<Chat | null>(null);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
@@ -161,7 +162,7 @@ export default function SharedChat() {
     <div className="flex h-screen bg-gray-900">
       <Sidebar
         onNewChat={handleNewChat}
-        currentChatId={params.id}
+        currentChatId={chatId}
         chats={chats.map(chat => ({
           id: chat.id,
           preview: chat.messages[chat.messages.length - 1]?.content || 'New Chat',
