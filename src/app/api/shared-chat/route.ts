@@ -49,7 +49,17 @@ export async function GET(request: Request) {
     if (!chatData) {
       return Response.json({ error: 'Chat not found' }, { status: 404 });
     }
-    return Response.json(typeof chatData === 'string' ? JSON.parse(chatData) : chatData);
+
+    // Set headers to prevent caching and keep connection alive
+    return new Response(JSON.stringify(typeof chatData === 'string' ? JSON.parse(chatData) : chatData), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Connection': 'keep-alive'
+      }
+    });
   } catch (error) {
     console.error('Redis error:', error);
     return Response.json({ error: 'Failed to fetch chat' }, { status: 500 });

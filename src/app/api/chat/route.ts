@@ -9,6 +9,9 @@ import { Groq } from 'groq-sdk';
 import puppeteer from 'puppeteer';
 import * as cheerio from 'cheerio';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { ContentExtractor } from '@/services/ContentExtractor';
+import { Visualizer } from '@/services/Visualizer';
+import { WebCrawler } from '@/services/WebCrawler';
 // Implementing the chat API with Groq  
 
 /*
@@ -57,27 +60,65 @@ type Message = {
   content: string;
 };
 
+// Add this helper function
+async function shouldCreateVisualization(content: string, data: any[] | undefined): Promise<boolean> {
+  if (!data) return false;
+
+  const model = client.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+  const prompt = `
+    Analyze this content and data to determine if a visualization would be helpful.
+    Consider factors like:
+    - Is this numerical/statistical data?
+    - Would a visual representation add value?
+    - Is the data suitable for charting?
+
+    Content: ${content.substring(0, 500)}...
+    Data Sample: ${JSON.stringify(data.slice(0, 3))}
+
+    Reply with only "true" or "false".
+  `;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    return response.text().toLowerCase().includes('true');
+  } catch (error) {
+    console.error('Error determining visualization need:', error);
+    return false;
+  }
+}
+
 // Applying the scraping to the chat request
 export async function POST(req: Request) {
   try {
     const { message, messages, url } = await req.json();
     
     let contextFromWeb = '';
+    let visualizations = [];
+
     if (url) {
       try {
-        const model = client.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
-        contextFromWeb = await scrapeWebsite(url);
+        const extractor = new ContentExtractor();
+        await extractor.init();
         
-        if (contextFromWeb.length > 1000) {
-          try {
-            contextFromWeb = await summarizeText(model, contextFromWeb);
-          } catch (error) {
-            // Fallback to truncation if summarization fails
-            contextFromWeb = contextFromWeb.substring(0, 1000) + '...';
-          }
+        const result = await extractor.extractFromUrl(url);
+        contextFromWeb = result.content;
+
+        // Only generate visualizations if the LLM determines it's useful
+        if (result.data && await shouldCreateVisualization(result.content, result.data)) {
+          const visualizer = new Visualizer();
+          visualizations = [
+            visualizer.generateChart(result.data, 'bar', {
+              xAxis: Object.keys(result.data[0])[0],
+              yAxis: Object.keys(result.data[0])[1],
+              title: 'Data Visualization'
+            })
+          ];
         }
+
+      
       } catch (error) {
-        console.error('Scraping error:', error);
+        console.error('Extraction error:', error);
       }
     }
 
