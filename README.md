@@ -1,6 +1,7 @@
 # AI Answer Engine: Context-Aware Chat Interface with Web Scraping
 
-![image](https://github.com/user-attachments/assets/a7628c6d-e9b5-4f68-abc4-86dd2977c9ae)
+![image](https://github.com/user-attachments/assets/47df5ea5-3e58-457e-b282-034597982d9c)
+
 
 
 ## Project Overview
