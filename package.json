@@ -10,6 +10,7 @@
     "format:fix": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\""
   },
   "dependencies": {
+    "@google/generative-ai": "^0.21.0",
     "@upstash/ratelimit": "^2.0.5",
     "cheerio": "^1.0.0",
     "groq-sdk": "^0.9.0",
