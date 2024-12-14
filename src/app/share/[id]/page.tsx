@@ -1,338 +1,249 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useEffect, useState } from "react";
+import { useRouter, useParams } from "next/navigation";
+import type { Message, Chat } from "@/types";
+import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ShareModal from '@/components/ShareModal';
 import Sidebar from '@/components/Sidebar';
 
-type Message = {
-  role: "user" | "ai";
-  content: string;
-};
-
-type Chat = {
-  id: string;
-  messages: Message[];
-  createdAt: string | Date;
-};
-
 export default function SharedChat() {
-  const router = useRouter();
   const params = useParams();
-  const chatId = typeof params.id === 'string' ? params.id : null;
-  const [chat, setChat] = useState<Chat | null>(null);
-  const [message, setMessage] = useState("");
+  const chatId = params?.id as string;
+  
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+  const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isConnected, setIsConnected] = useState(true);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
-  const [chats, setChats] = useState<Chat[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('shared_chats');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed;
-      }
-    }
-    return [];
-  });
-  const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
-  const [editMessage, setEditMessage] = useState('');
+  const router = useRouter();
 
   useEffect(() => {
-    localStorage.setItem('shared_chats', JSON.stringify(chats));
-  }, [chats]);
+    if (chatId) {
+      setCurrentChatId(chatId);
+    }
+  }, [chatId]);
 
-  // Add new chat functionality
+  useEffect(() => {
+    const fetchChat = async () => {
+      if (!currentChatId) return;
+      
+      try {
+        const response = await fetch(`/api/shared-chat?id=${currentChatId}`);
+        if (!response.ok) {
+          throw new Error('Chat not found');
+        }
+        const data = await response.json();
+        const chat = {
+          ...data,
+          createdAt: new Date(data.createdAt)
+        };
+        setChats([chat]);
+      } catch (error) {
+        console.error('Error fetching shared chat:', error);
+        router.push('/');
+      }
+    };
+
+    fetchChat();
+  }, [currentChatId, router]);
+
+  const currentChat = chats.find(chat => chat.id === currentChatId);
+  const messages = currentChat?.messages || [];
+
   function generateId() {
     return Math.random().toString(36).substring(2, 15);
   }
 
   const handleNewChat = () => {
-    const newChat = {
+    const newChat: Chat = {
       id: generateId(),
       messages: [{ role: "ai" as const, content: "Hello! How can I help you today?" }],
       createdAt: new Date()
     };
     setChats(prev => [newChat, ...prev]);
-    router.push(`/share/${newChat.id}`);
+    setCurrentChatId(newChat.id);
+    setNewMessage("");
   };
 
   const handleSelectChat = (chatId: string) => {
-    router.push(`/share/${chatId}`);
+    setCurrentChatId(chatId);
+    setNewMessage("");
   };
 
-  // Fetch chat data with reconnection logic
-  const fetchChat = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/shared-chat?id=${params.id}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch chat');
-      }
-      const data = await response.json();
-      setChat(data);
-      setIsConnected(true);
-    } catch (error) {
-      console.error('Error fetching chat:', error);
-      setIsConnected(false);
-    }
-  }, [params.id]);
-
-  useEffect(() => {
-    fetchChat();
-    const interval = setInterval(fetchChat, 5000);
-    return () => clearInterval(interval);
-  }, [fetchChat]);
-
   const handleShareChat = async () => {
-    if (!chat) return;
-    const shareUrl = `${window.location.origin}/share/${chat.id}`;
-    setShareUrl(shareUrl);
-    setIsShareModalOpen(true);
+    if (!currentChat) return;
+    
+    try {
+      const response = await fetch("/api/shared-chat", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat: currentChat }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create shared chat');
+      }
+
+      const shareUrl = `${window.location.origin}/share/${currentChat.id}`;
+      setShareUrl(shareUrl);
+      setIsShareModalOpen(true);
+    } catch (error) {
+      console.error('Error sharing chat:', error);
+      alert('Failed to share chat');
+    }
   };
 
   const handleSend = async () => {
-    if (!message.trim() || !chat) return;
-
+    if (!newMessage.trim() || !currentChatId) return;
+    
     setIsLoading(true);
     try {
-      const newMessage = { role: "user" as const, content: message };
-      setChat(prev => prev ? {
-        ...prev,
-        messages: [...prev.messages, newMessage]
-      } : null);
-      setMessage("");
+      const userMessage = { role: "user" as const, content: newMessage };
+      const updatedMessages = currentChat 
+        ? [...currentChat.messages, userMessage]
+        : [userMessage];
+
+      setChats(prevChats => {
+        const updatedChat = {
+          id: currentChatId,
+          messages: updatedMessages,
+          createdAt: new Date(),
+          isShared: true
+        };
+        return prevChats.map(chat => 
+          chat.id === currentChatId ? updatedChat : chat
+        );
+      });
+      setNewMessage("");
 
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: message,
-          messages: chat.messages,
-          chatId: chat.id,
-          isSharedChat: true
+          message: newMessage,
+          messages: updatedMessages,
+          url: null
         }),
       });
 
       if (!response.ok) {
-        if (response.status === 429) {
-          const resetTime = parseInt(response.headers.get('Retry-After') || '60');
-          localStorage.setItem('returnUrl', `/share/${chat.id}`);
-          window.location.href = `/blocked?reset=${resetTime}&returnUrl=${encodeURIComponent(`/share/${chat.id}`)}`;
-          return;
-        }
-        throw new Error('Failed to send message');
+        throw new Error('Failed to get AI response');
       }
 
-      const data = await response.json();
-      setChat(prev => prev ? {
-        ...prev,
-        messages: [...prev.messages, { 
-          role: "ai", 
-          content: data.content || data.message || "No response received" 
-        }]
-      } : null);
+      const { content, visualizations } = await response.json();
 
-      await fetchChat(); // Refresh to ensure consistency
+      const newMessages = [
+        ...updatedMessages,
+        { role: "ai" as const, content }
+      ];
+
+      await fetch("/api/shared-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chatId: currentChatId,
+          messages: newMessages
+        }),
+      });
+
+      setChats(prevChats => 
+        prevChats.map(chat => 
+          chat.id === currentChatId 
+            ? {
+                ...chat,
+                messages: newMessages,
+                visualizations
+              }
+            : chat
+        )
+      );
+
     } catch (error) {
-      console.error("Error:", error);
-      setIsConnected(false);
+      console.error('Error:', error);
+      alert('Failed to send message. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleDeleteChat = async (chatId: string) => {
-    try {
-      await fetch(`/api/shared-chat/${chatId}`, {
-        method: 'DELETE',
-      });
-      setChats(prev => prev.filter(c => c.id !== chatId));
-      if (chatId === chat?.id) {
-        router.push('/share');
-      }
-    } catch (error) {
-      console.error('Error deleting chat:', error);
-    }
-  };
-
-  const handleDeleteMessage = (index: number) => {
-    if (!chat) return;
-    
-    setChat(prev => {
-      if (!prev) return null;
-      const newMessages = [...prev.messages];
-      newMessages.splice(index, 1);
-      return { ...prev, messages: newMessages };
-    });
-  };
-
-  const handleEditMessage = (index: number) => {
-    if (!chat) return;
-    setEditingMessageId(index);
-    setEditMessage(chat.messages[index].content);
-  };
-
-  const handleSaveEdit = async (index: number) => {
-    if (!chat || !editMessage.trim()) return;
-    
-    setChat(prev => {
-      if (!prev) return null;
-      const newMessages = [...prev.messages];
-      newMessages[index] = { ...newMessages[index], content: editMessage };
-      return { ...prev, messages: newMessages };
-    });
-    
-    setEditingMessageId(null);
-    setEditMessage('');
-  };
-
-  if (!chat) {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-white mb-4">
-            {isConnected ? 'Loading shared chat...' : 'Connection lost. Reconnecting...'}
-          </div>
-          {!isConnected && (
-            <button 
-              onClick={fetchChat}
-              className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-lg text-white text-sm transition-colors"
-            >
-              Retry Connection
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-screen bg-gray-900">
       <Sidebar
         onNewChat={handleNewChat}
-        currentChatId={chatId}
+        currentChatId={currentChatId}
         chats={chats.map(chat => ({
           id: chat.id,
           preview: chat.messages[chat.messages.length - 1]?.content || 'New Chat',
-          createdAt: chat.createdAt
+          createdAt: chat.createdAt.toISOString()
         }))}
         onSelectChat={handleSelectChat}
-        onDeleteChat={handleDeleteChat}
       />
-
+      
       <div className="flex-1 flex flex-col">
-        {!isConnected && (
-          <div className="bg-red-500/10 p-2 text-center">
-            <span className="text-red-400">Connection lost. Attempting to reconnect...</span>
-          </div>
-        )}
-
-        {/* Header */}
+        {/* Header with share button */}
         <div className="w-full bg-gray-800 border-b border-gray-700 p-4">
           <div className="max-w-3xl mx-auto flex justify-between items-center">
-            <div>
-              <h1 className="text-xl font-semibold text-white">Shared Chat</h1>
-              <p className="text-sm text-gray-400">
-                {chat && new Date(chat.createdAt).toLocaleDateString()}
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => handleDeleteChat(chat.id)}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white text-sm transition-colors"
-              >
-                Delete Chat
-              </button>
-              <button
-                onClick={handleNewChat}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white text-sm transition-colors"
-              >
-                New Chat
-              </button>
-              <button
-                onClick={handleShareChat}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-white text-sm"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
-                </svg>
-                Share Chat
-              </button>
-            </div>
+            <h1 className="text-xl font-semibold text-white">Shared Chat</h1>
+            <button
+              onClick={handleShareChat}
+              className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-white text-sm"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
+              </svg>
+              Share Chat
+            </button>
           </div>
         </div>
 
-        {/* Messages Container */}
+        {/* Messages avec le même style que le chat principal */}
         <div className="flex-1 overflow-y-auto pb-32 pt-4">
           <div className="max-w-3xl mx-auto px-4">
-            {chat.messages.map((msg, index) => (
+            {messages.map((msg, index) => (
               <div
                 key={index}
                 className={`flex gap-4 mb-4 ${
                   msg.role === "ai" ? "justify-start" : "justify-end flex-row-reverse"
                 }`}
               >
-                <div className="relative group">
-                  <div
-                    className={`px-4 py-2 rounded-2xl max-w-[80%] ${
-                      msg.role === "ai"
-                        ? "bg-gray-800 border border-gray-700 text-gray-100"
-                        : "bg-cyan-600 text-white"
-                    }`}
-                  >
-                    {editingMessageId === index ? (
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={editMessage}
-                          onChange={(e) => setEditMessage(e.target.value)}
-                          className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1"
-                          autoFocus
-                        />
-                        <button
-                          onClick={() => handleSaveEdit(index)}
-                          className="text-sm bg-green-600 px-2 py-1 rounded"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => setEditingMessageId(null)}
-                          className="text-sm bg-gray-600 px-2 py-1 rounded"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      msg.content
-                    )}
-                  </div>
-                  
-                  {/* Message Actions */}
-                  <div className="absolute top-0 right-full mr-2 hidden group-hover:flex items-center gap-1">
-                    {msg.role === "user" && (
-                      <>
-                        <button
-                          onClick={() => handleEditMessage(index)}
-                          className="p-1 hover:bg-gray-700 rounded"
-                          title="Edit message"
-                        >
-                          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => handleDeleteMessage(index)}
-                          className="p-1 hover:bg-gray-700 rounded"
-                          title="Delete message"
-                        >
-                          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </>
-                    )}
-                  </div>
+                <div
+                  className={`px-4 py-2 rounded-2xl max-w-[80%] ${
+                    msg.role === "ai"
+                      ? "bg-gray-800 border border-gray-700 text-gray-100 markdown-body"
+                      : "bg-cyan-600 text-white ml-auto"
+                  }`}
+                >
+                  {msg.role === "ai" ? (
+                    <ReactMarkdown
+                      components={{
+                        code({node, inline, className, children, ...props}) {
+                          const match = /language-(\w+)/.exec(className || '');
+                          return !inline && match ? (
+                            <SyntaxHighlighter
+                              style={atomDark}
+                              language={match[1]}
+                              PreTag="div"
+                              {...props}
+                            >
+                              {String(children).replace(/\n$/, '')}
+                            </SyntaxHighlighter>
+                          ) : (
+                            <code className={className} {...props}>
+                              {children}
+                            </code>
+                          );
+                        }
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  ) : (
+                    msg.content
+                  )}
                 </div>
               </div>
             ))}
@@ -350,22 +261,23 @@ export default function SharedChat() {
           </div>
         </div>
 
-        {/* Input Area */}
+        {/* Input area avec le même style */}
         <div className="fixed bottom-0 w-full bg-gray-800 border-t border-gray-700 p-4">
           <div className="max-w-3xl mx-auto">
-            <div className="flex gap-3">
+            <div className="flex gap-3 items-center">
               <input
                 type="text"
-                value={message}
-                onChange={e => setMessage(e.target.value)}
+                value={newMessage}
+                onChange={e => setNewMessage(e.target.value)}
                 onKeyPress={e => e.key === "Enter" && handleSend()}
                 placeholder="Type your message..."
-                className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                className="flex-1 rounded-xl border border-gray-700 bg-gray-900 px-4 py-3 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent placeholder-gray-400"
+                disabled={isLoading}
               />
               <button
                 onClick={handleSend}
                 disabled={isLoading}
-                className="bg-cyan-600 text-white px-5 py-3 rounded-xl hover:bg-cyan-700 transition-all disabled:opacity-50"
+                className="bg-cyan-600 text-white px-5 py-3 rounded-xl hover:bg-cyan-700 transition-all disabled:bg-cyan-800 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? "Sending..." : "Send"}
               </button>

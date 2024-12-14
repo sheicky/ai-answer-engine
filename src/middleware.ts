@@ -12,23 +12,22 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 });
 
-// Create separate rate limiters for different types of chats
+// Configure rate limiter with sliding window
 const mainRateLimit = new Ratelimit({
   redis,
-  limiter: Ratelimit.fixedWindow(5, '60 s'),  // 5 requests per minute for main chats
+  limiter: Ratelimit.slidingWindow(2, "30 s"), // 5 requests per minute
   analytics: true,
-  prefix: '@upstash/ratelimit/main',
-});
-
-const sharedRateLimit = new Ratelimit({
-  redis,
-  limiter: Ratelimit.slidingWindow(10, '60 s'),  // 10 requests per minute for shared chats
-  analytics: true,
-  prefix: '@upstash/ratelimit/shared',
+  prefix: '@upstash/ratelimit',
+  ephemeralCache: new Map(), // Add cache for better performance
 });
 
 export async function middleware(request: NextRequest) {
-  if (request.nextUrl.pathname === '/blocked') {
+  // Skip rate limiting for share endpoints
+  if (
+    request.nextUrl.pathname.startsWith('/api/shared-chat') || 
+    request.nextUrl.pathname.startsWith('/share/') ||
+    request.nextUrl.pathname === '/blocked'
+  ) {
     return NextResponse.next();
   }
 
@@ -36,25 +35,32 @@ export async function middleware(request: NextRequest) {
     const ip = request.headers.get("x-real-ip") ?? 
                request.headers.get("x-forwarded-for") ?? 
                '127.0.0.1';
-
-    // Check if this is a shared chat request
-    const isSharedChat = request.nextUrl.pathname.startsWith('/share/');
     
-    // Create unique identifiers for each user's chat session
-    const identifier = `${ip}:${isSharedChat ? 'shared' : 'main'}`;
-    
-    // Use appropriate rate limiter based on chat type
-    const limiter = isSharedChat ? sharedRateLimit : mainRateLimit;
-    const { success, limit, remaining, reset } = await limiter.limit(identifier);
+    const { success, limit, remaining, reset } = await mainRateLimit.limit(ip);
 
+    // If rate limit is exceeded
     if (!success) {
-      const resetTime = Math.ceil((reset - Date.now()) / 1000);
+      const now = Date.now();
+      
+      // If the reset time has passed, allow the request and reset counter
+      if (now >= reset) {
+        await redis.del(`@upstash/ratelimit:${ip}`);
+        return NextResponse.next();
+      }
+
+      // Otherwise, return rate limit error
+      const resetTime = Math.ceil((reset - now) / 1000);
       return NextResponse.json(
-        { error: 'Rate limit exceeded' },
+        { 
+          error: 'Rate limit exceeded',
+          resetIn: resetTime,
+          nextRequestAt: new Date(reset).toISOString()
+        },
         { 
           status: 429,
           headers: {
             'Retry-After': resetTime.toString(),
+            'X-RateLimit-Reset': reset.toString(),
           }
         }
       );
@@ -63,6 +69,7 @@ export async function middleware(request: NextRequest) {
     const response = NextResponse.next();
     response.headers.set('X-RateLimit-Limit', limit.toString());
     response.headers.set('X-RateLimit-Remaining', remaining.toString());
+    response.headers.set('X-RateLimit-Reset', reset.toString());
     return response;
 
   } catch (error) {

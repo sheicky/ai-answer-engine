@@ -100,24 +100,36 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Redis not configured' }, { status: 500 });
   }
 
-  const { chatId, message } = await request.json();
-  
-  if (!chatId) {
-    return Response.json({ error: 'Chat ID is required' }, { status: 400 });
-  }
-
   try {
-    const chatData = await redis.get(`chat:${chatId}`);
-    if (!chatData) {
+    const { chatId, messages } = await request.json();
+    
+    if (!chatId || !messages) {
+      return Response.json({ error: 'Invalid request data' }, { status: 400 });
+    }
+
+    const chatKey = `chat:${chatId}`;
+    const existingChat = await redis.get(chatKey);
+    
+    if (!existingChat) {
       return Response.json({ error: 'Chat not found' }, { status: 404 });
     }
 
-    const chat = JSON.parse(chatData.toString());
-    chat.messages.push(message);
-    
-    // Update with stringified data and same expiration
-    await redis.set(`chat:${chatId}`, JSON.stringify(chat), {
-      ex: 60 * 60 * 24 * 7 // maintain 7 days expiration
+    let chat;
+    try {
+      chat = typeof existingChat === 'string' 
+        ? JSON.parse(existingChat)
+        : JSON.parse(existingChat.toString());
+    } catch (error) {
+      console.error('Parse error:', error);
+      return Response.json({ error: 'Invalid chat data' }, { status: 500 });
+    }
+
+    // Mettre à jour les messages
+    chat.messages = messages;
+
+    // Sauvegarder le chat mis à jour
+    await redis.set(chatKey, JSON.stringify(chat), {
+      ex: 60 * 60 * 24 * 7 // 7 jours d'expiration
     });
     
     return Response.json(chat);

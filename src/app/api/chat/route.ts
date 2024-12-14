@@ -136,7 +136,6 @@ export async function POST(req: Request) {
         You are a helpful assistant. When providing answers, ensure to cite reliable and verifiable sources. 
         Use a conventional citation style by referring to sources with numbered references in the text (e.g., [1], [2])
          and listing the corresponding sources at the end of your response as clickable links. 
-        Format your sources like this: "[1] <a href='URL' class='text-blue-500 hover:text-blue-600 underline'>Title or Description</a>"
         Do not hesitate to give multiple sources if possible .
         `,
         contextFromWeb ? `Context: ${contextFromWeb}` : "",
