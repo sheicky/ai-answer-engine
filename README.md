@@ -104,7 +104,7 @@ Visit [http://localhost:3000](http://localhost:3000) to see the application.
 
 ## Demo
 
-Check out our video demo here: [YouTube Demo Link]
+Check out our video demo here: https://youtu.be/D3eZmsAy2lI?si=7ScyRUdvYJh8smsC
 
 ---
 
