@@ -2,7 +2,7 @@ import type { Browser } from 'puppeteer';
 import * as puppeteer from 'puppeteer';
 import * as cheerio from 'cheerio';
 import ytdl from 'ytdl-core';
-import { createWorker } from 'tesseract.js';
+//import { createWorker } from 'tesseract.js';
 
 // Dynamic imports to handle missing dependencies gracefully
 const loadDependencies = async () => {

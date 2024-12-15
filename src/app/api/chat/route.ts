@@ -5,13 +5,13 @@
 // Refer to Puppeteer docs here: https://pptr.dev/guides/what-is-puppeteer
 
 // Importing libraries
-import { Groq } from 'groq-sdk';
-import puppeteer from 'puppeteer';
-import * as cheerio from 'cheerio';
+//import { Groq } from 'groq-sdk';
+//import puppeteer from 'puppeteer';
+//import * as cheerio from 'cheerio';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ContentExtractor } from '@/services/ContentExtractor';
 import { Visualizer } from '@/services/Visualizer';
-import { WebCrawler } from '@/services/WebCrawler';
+//import { WebCrawler } from '@/services/WebCrawler';
 import type { ChartConfiguration } from 'chart.js';
 // Implementing the chat API with Groq  
 
@@ -26,26 +26,25 @@ if (!process.env['GEMINI_API_KEY']) {
 }
 const client = new GoogleGenerativeAI(process.env['GEMINI_API_KEY']);
 //  Web Scraping  
-async function scrapeWebsite(url: string) {
-  const browser = await puppeteer.launch({ headless: true }); 
-  try {
-    const page = await browser.newPage(); 
-    await page.goto(url);
-    const content = await page.content(); 
+// async function scrapeWebsite(url: string) {
+//   const browser = await puppeteer.launch({ headless: true }); 
+//   try {
+//     const page = await browser.newPage(); 
+//     await page.goto(url);
+//     const content = await page.content(); 
+//
+//     // Using cheerio to parse the HTML 
+//     const parsedHTML = cheerio.load(content); 
+//     const text = parsedHTML('body').text().trim(); 
+//     return text; 
+//
+//   } finally {
+//     await browser.close(); 
+//   }
+// }
 
-    // Using cheerio to parse the HTML 
-    const parsedHTML = cheerio.load(content); 
-    const text = parsedHTML('body').text().trim(); 
-    return text; 
-
-  } finally {
-    await browser.close(); 
-  }
-}
-
-
-// Summarizing the text
-async function summarizeText(model: any, text: string) {
+// Supprimer ou commenter la fonction inutilisée
+/* async function summarizeText(model: any, text: string) {
   try {
     const summaryPrompt = `Please summarize this text while keeping the important information (max 1000 characters): \n\n${text}`;
     const result = await model.generateContent(summaryPrompt);
@@ -53,10 +52,9 @@ async function summarizeText(model: any, text: string) {
     return response.text();
   } catch (error) {
     console.error('Summarization error:', error);
-    // Fallback to truncation if summarization fails
     return text.substring(0, 1000) + '...';
   }
-}
+} */
 
 type Message = {
   role: "user" | "ai";

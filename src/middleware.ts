@@ -15,7 +15,7 @@ const redis = new Redis({
 // Configure rate limiter with sliding window
 const mainRateLimit = new Ratelimit({
   redis,
-  limiter: Ratelimit.slidingWindow(2, "30 s"), // 5 requests per minute
+  limiter: Ratelimit.slidingWindow(2, "30 s"), // 2 requests per 30s
   analytics: true,
   prefix: '@upstash/ratelimit',
   ephemeralCache: new Map(), // Add cache for better performance
