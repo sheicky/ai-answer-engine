@@ -4,7 +4,7 @@
 // Refer to the Cheerio docs here on how to parse HTML: https://cheerio.js.org/docs/basics/loading
 // Refer to Puppeteer docs here: https://pptr.dev/guides/what-is-puppeteer
 
-// Importing libraries
+// libraries
 //import { Groq } from 'groq-sdk';
 //import puppeteer from 'puppeteer';
 //import * as cheerio from 'cheerio';
