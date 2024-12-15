@@ -62,7 +62,7 @@ type Message = {
 };
 
 // Add this helper function
-async function shouldCreateVisualization(content: string, data: any[] | undefined): Promise<boolean> {
+async function shouldCreateVisualization(content: string, data: Record<string, unknown>[] | undefined): Promise<boolean> {
   if (!data) return false;
 
   const model = client.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
@@ -163,8 +163,8 @@ export async function POST(req: Request) {
         }
       });
 
-    } catch (error: any) {
-      if (error.message?.includes('429') || error.message?.includes('quota')) {
+    } catch (error: unknown) {
+      if (error instanceof Error && (error.message?.includes('429') || error.message?.includes('quota'))) {
         return Response.json(
           { error: 'Rate limit exceeded. Please try again later.' },
           { status: 429 }
