@@ -1,15 +1,19 @@
 import { Redis } from "@upstash/redis";
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL || '',
   token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
 });
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+interface RouteParams {
+  params: {
+    id: string;
+  };
+}
+
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
   if (!redis) {
     return NextResponse.json({ error: 'Redis not configured' }, { status: 500 });
   }
