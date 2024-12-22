@@ -6,13 +6,10 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
 });
 
-interface RouteParams {
-  params: {
-    id: string;
-  };
-}
-
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
   if (!redis) {
     return Response.json({ error: 'Redis not configured' }, { status: 500 });
   }
@@ -20,7 +17,6 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = params;
     
-    // Delete the chat and all associated data atomically
     await Promise.all([
       redis.del(`chat:${id}`),
       redis.del(`chat:${id}:messages`),
