@@ -9,13 +9,14 @@
 AI Answer Engine is a sophisticated chat interface that leverages Large Language Models (LLMs) to provide context-aware responses with source citations. The system can process multiple URLs simultaneously, extract relevant information, and engage in meaningful conversations while maintaining proper attribution.
 
 ### Key Features
-Users can:
-- Have a normal conversations with the model
-- Paste multiple URLs for context extraction
-- Ask questions and receive sourced answers
-- Share conversations via unique links
-- Continue shared conversations
-- View data visualizations when applicable
+- 🤖 Advanced chat interface ( gemini flash 2.0 model)
+- 📊 Data visualization capabilities for CSV and structured data
+- 🎥 YouTube video transcript analysis
+- 📄 PDF document parsing and analysis
+- 🌐 Web content extraction and analysis
+- 📊 Automatic chart generation for numerical data
+- 💾 Chat history persistence with Redis
+- 🔗 Shareable chat sessions
 
 ## Tech Stack
 
@@ -81,25 +82,7 @@ Visit [http://localhost:3000](http://localhost:3000) to see the application.
    - Error handling
 
 
-## Future Enhancements
 
-1. **Extended Content Extraction**
-   - YouTube video transcription
-   - PDF document parsing
-   - CSV data processing
-   - Image analysis and OCR
-
-2. **Advanced Visualization**
-   - Interactive charts
-   - Custom visualization types
-   - Real-time data updates
-   - Export capabilities
-
-3. **Hierarchical Web Crawling**
-   - Deep link analysis
-   - Content relevance scoring
-   - Media link extraction
-   - Recursive crawling
 
 
 ## Demo
