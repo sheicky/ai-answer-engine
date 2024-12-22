@@ -1,5 +1,5 @@
 import { Redis } from "@upstash/redis";
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL || '',
@@ -8,10 +8,10 @@ const redis = new Redis({
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { [key: string]: string } }
+  { params }: { params: { id: string } }
 ) {
   if (!redis) {
-    return Response.json({ error: 'Redis not configured' }, { status: 500 });
+    return NextResponse.json({ error: 'Redis not configured' }, { status: 500 });
   }
 
   try {
@@ -23,7 +23,7 @@ export async function DELETE(
       redis.del(`chat:${id}:metadata`)
     ]);
     
-    return new Response(JSON.stringify({ success: true }), {
+    return NextResponse.json({ success: true }, {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
@@ -31,8 +31,8 @@ export async function DELETE(
     });
   } catch (error) {
     console.error('Redis error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Failed to delete chat' }), 
+    return NextResponse.json(
+      { error: 'Failed to delete chat' }, 
       { 
         status: 500,
         headers: {
