@@ -1,5 +1,18 @@
 import { ContentExtractor } from './ContentExtractor';
 
+interface CrawlOptions {
+  maxDepth: number;
+  maxPages: number;
+  allowedDomains?: string[];
+}
+
+interface CrawlResult {
+  content: string;
+  metadata: Record<string, unknown>;
+  links: string[];
+  mediaUrls: string[];
+}
+
 export class WebCrawler {
   private visited = new Set<string>();
   private queue: string[] = [];
@@ -9,15 +22,11 @@ export class WebCrawler {
     this.contentExtractor = new ContentExtractor();
   }
 
-  async crawl(startUrl: string, options: {
-    maxDepth: number;
-    maxPages: number;
-    allowedDomains?: string[];
-  }) {
+  async crawl(startUrl: string, options: CrawlOptions): Promise<Map<string, CrawlResult>> {
     await this.contentExtractor.init();
     this.queue.push(startUrl);
     
-    const results = new Map<string, any>();
+    const results = new Map<string, CrawlResult>();
     let depth = 0;
     let pagesProcessed = 0;
 

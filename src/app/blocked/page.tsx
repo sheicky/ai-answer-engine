@@ -85,7 +85,7 @@ export default function BlockedPage() {
           </button>
 
           <p className="mt-4 text-sm text-gray-400">
-            Magic happens while you wait ✨
+            Magic happens while you wait &apos;✨&apos;
           </p>
         </div>
       </div>

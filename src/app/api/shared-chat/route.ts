@@ -116,9 +116,9 @@ export async function POST(request: Request) {
 
     let chat;
     try {
-      chat = typeof existingChat === 'string' 
+      chat = typeof existingChat === 'string'
         ? JSON.parse(existingChat)
-        : JSON.parse(existingChat.toString());
+        : existingChat;
     } catch (error) {
       console.error('Parse error:', error);
       return Response.json({ error: 'Invalid chat data' }, { status: 500 });

@@ -1,39 +1,88 @@
-import type { Browser } from 'puppeteer';
 import * as puppeteer from 'puppeteer';
 import * as cheerio from 'cheerio';
 import ytdl from 'ytdl-core';
 //import { createWorker } from 'tesseract.js';
+import Papa from 'papaparse';
 
 // Dynamic imports to handle missing dependencies gracefully
 const loadDependencies = async () => {
   try {
-    return {
-      ytdl: await import('ytdl-core'),
-      pdf: await import('pdf-parse'),
-      csv: await import('csv-parse'),
-      tesseract: await import('tesseract.js'),
-      Chart: (await import('chart.js/auto')).Chart
+    const deps: any = {
+      ytdl: null,
+      pdf: null,
+      tesseract: null,
+      Chart: null
     };
+    
+    try { deps.ytdl = await import('ytdl-core'); } catch (e) { console.warn('ytdl-core not available'); }
+    try { deps.pdf = await import('pdf-parse'); } catch (e) { console.warn('pdf-parse not available'); }
+    try { deps.tesseract = await import('tesseract.js'); } catch (e) { console.warn('tesseract.js not available'); }
+    try { deps.Chart = (await import('chart.js/auto')).Chart; } catch (e) { console.warn('chart.js not available'); }
+    
+    return deps;
   } catch (error) {
     console.error('Error loading dependencies:', error);
     return {};
   }
 };
 
+interface ExtractedData {
+  content: string;
+  metadata: Record<string, unknown>;
+  links: string[];
+  mediaUrls: string[];
+  data?: Record<string, unknown>[];
+}
+
+interface YouTubeInfo {
+  videoDetails: {
+    title: string;
+    author: {
+      name: string;
+    };
+    lengthSeconds: string;
+    description?: string | null;
+    thumbnails: Array<{ url: string }>;
+  };
+  player_response: {
+    captions?: {
+      playerCaptionsRenderer?: {
+        baseUrl: string;
+        visibility: string;
+      };
+      playerCaptionsTracklistRenderer?: {
+        captionTracks: Array<{
+          baseUrl: string;
+          languageCode: string;
+          name: { simpleText: string };
+          vssId: string;
+        }>;
+        audioTracks: any[];
+        translationLanguages: any[];
+        defaultAudioTrackIndex: number;
+      };
+    };
+  };
+}
+
+type captionTrack = {
+  baseUrl: string;
+  languageCode: string;
+  name: { simpleText: string };
+  vssId: string;
+};
+
 export class ContentExtractor {
   private browser: puppeteer.Browser | null = null;
 
   async init() {
-    this.browser = await puppeteer.launch({ headless: true });
+    this.browser = await puppeteer.launch({ 
+      headless: true,  // Chang de "new" à true
+      args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+    });
   }
 
-  async close() {
-    if (this.browser) {
-      await this.browser.close();
-    }
-  }
-
-  async extractFromUrl(url: string) {
+  async extractFromUrl(url: string): Promise<ExtractedData> {
     const urlType = this.detectUrlType(url);
     
     // Default to webpage extraction if dependencies are missing
@@ -41,7 +90,6 @@ export class ContentExtractor {
       const deps = await loadDependencies();
       if (!deps.ytdl && urlType === 'youtube') return this.extractWebpage(url);
       if (!deps.pdf && urlType === 'pdf') return this.extractWebpage(url);
-      if (!deps.csv && urlType === 'csv') return this.extractWebpage(url);
       if (!deps.tesseract && urlType === 'image') return this.extractWebpage(url);
     }
 
@@ -56,6 +104,13 @@ export class ContentExtractor {
         return await this.extractImage(url);
       default:
         return await this.extractWebpage(url);
+    }
+  }
+
+  async close() {
+    if (this.browser) {
+      await this.browser.close();
+      this.browser = null;
     }
   }
 
@@ -75,22 +130,41 @@ export class ContentExtractor {
     return 'webpage';
   }
 
-  private async extractYouTube(url: string) {
-    const info = await ytdl.getInfo(url);
-    const captions = await this.getYouTubeCaptions(info);
-    const transcript = this.formatTranscript(captions);
+  private async extractYouTube(url: string): Promise<ExtractedData> {
+    try {
+      const info = await ytdl.getInfo(url);
+      const transcript = await this.getYouTubeCaptions(url);
 
-    return {
-      content: transcript,
-      metadata: {
-        title: info.videoDetails.title,
-        author: info.videoDetails.author,
-        duration: info.videoDetails.lengthSeconds,
-      },
-      links: [],
-      mediaUrls: [url],
-      data: undefined
-    };
+      // Create a rich content summary
+      const content = `
+Title: ${info.videoDetails.title}
+Channel: ${info.videoDetails.author.name}
+Duration: ${Math.floor(parseInt(info.videoDetails.lengthSeconds) / 60)}m ${parseInt(info.videoDetails.lengthSeconds) % 60}s
+Description: ${info.videoDetails.description || 'No description available'}
+
+Transcript:
+${transcript}
+      `.trim();
+
+      return {
+        content,
+        metadata: {
+          title: info.videoDetails.title,
+          author: info.videoDetails.author.name,
+          duration: info.videoDetails.lengthSeconds,
+          description: info.videoDetails.description,
+          url: url,
+          thumbnailUrl: info.videoDetails.thumbnails[0]?.url
+        },
+        links: [url],
+        mediaUrls: [url],
+        data: undefined
+      };
+    } catch (error) {
+      console.error('YouTube extraction error:', error);
+      // Fallback to webpage extraction if YouTube-specific extraction fails
+      return this.extractWebpage(url);
+    }
   }
 
   private async extractPDF(url: string) {
@@ -113,33 +187,38 @@ export class ContentExtractor {
     };
   }
 
-  private async extractCSV(url: string) {
-    const deps = await loadDependencies();
-    if (!deps.csv) throw new Error('CSV parser not available');
-
-    const response = await fetch(url);
-    const text = await response.text();
-    const records: any[] = [];
-
-    await new Promise((resolve) => {
-      deps.csv.parse(text, {
-        columns: true,
-        skip_empty_lines: true,
-      })
-        .on('data', (data) => records.push(data))
-        .on('end', resolve);
-    });
-
-    return {
-      content: this.formatCSVContent(records),
-      metadata: {
-        rows: records.length,
-        columns: Object.keys(records[0] || {}).length,
-      },
-      links: [],
-      mediaUrls: [],
-      data: records
-    };
+  private async extractCSV(url: string): Promise<ExtractedData> {
+    try {
+        const response = await fetch(url);
+        const text = await response.text();
+        
+        return new Promise<ExtractedData>((resolve, reject) => {
+            Papa.parse<Record<string, unknown>>(text, {
+                header: true,
+                complete: (results) => {
+                    const records = results.data;
+                    resolve({
+                        content: this.formatCSVContent(records),
+                        metadata: {
+                            rows: records.length,
+                            columns: results.meta.fields?.length || 0,
+                            fields: results.meta.fields,
+                            errors: results.errors
+                        },
+                        links: [],
+                        mediaUrls: [],
+                        data: records as Record<string, unknown>[]
+                    });
+                },
+                error: (error: Error, file?: any) => {
+                    reject(new Error(`CSV parsing error: ${error.message}`));
+                }
+            });
+        });
+    } catch (error) {
+        console.error('Error processing CSV:', error);
+        throw error;
+    }
   }
 
   private async extractImage(url: string) {
@@ -159,68 +238,96 @@ export class ContentExtractor {
     };
   }
 
-  private async extractWebpage(url: string) {
+  private async extractWebpage(url: string): Promise<ExtractedData> {
     if (!this.browser) {
       throw new Error('Browser not initialized');
     }
 
     const page = await this.browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle0' });
-    
-    const content = await page.content();
-    const $ = cheerio.load(content);
-    
-    // Remove unnecessary elements
-    $('script, style, noscript, iframe, img').remove();
-    
-    const links = new Set<string>();
-    const mediaUrls = new Set<string>();
-
-    $('a').each((_, el) => {
-      const href = $(el).attr('href');
-      if (href && !href.startsWith('#')) {
-        links.add(new URL(href, url).toString());
-      }
-    });
-
-    $('img, video, audio, source').each((_, el) => {
-      const src = $(el).attr('src');
-      if (src) {
-        mediaUrls.add(new URL(src, url).toString());
-      }
-    });
-
-    return {
-      content: $('body').text().trim(),
-      metadata: {
-        title: $('title').text(),
-        description: $('meta[name="description"]').attr('content'),
-      },
-      links: Array.from(links),
-      mediaUrls: Array.from(mediaUrls),
-      data: undefined
-    };
-  }
-
-  private async getYouTubeCaptions(info: any) {
     try {
-      const captions = info.player_response.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-      if (!captions?.length) return '';
+      // Set a shorter timeout and handle navigation errors
+      await Promise.race([
+        page.goto(url, { 
+          waitUntil: 'domcontentloaded', // Changed from networkidle0 to domcontentloaded
+          timeout: 15000 // Reduced timeout to 15 seconds
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Navigation timeout')), 15000)
+        )
+      ]).catch(error => {
+        console.warn(`Navigation warning for ${url}:`, error.message);
+        // Continue execution even if navigation times out
+      });
       
-      const caption = captions[0];
-      const response = await fetch(caption.baseUrl);
-      return await response.text();
-    } catch (error) {
-      console.error('Error getting captions:', error);
-      return '';
+      const content = await page.content();
+      const $ = cheerio.load(content);
+      
+      // Clean up content
+      $('script, style, noscript, iframe').remove();
+      
+      // Extract main content
+      const mainContent = $('article, main, .content, #content, .post, .article')
+        .first()
+        .text()
+        .trim() || $('body').text().trim();
+
+      // Extract links and media
+      const links = new Set<string>();
+      const mediaUrls = new Set<string>();
+
+      $('a').each((_, el) => {
+        const href = $(el).attr('href');
+        if (href && !href.startsWith('#')) {
+          try {
+            links.add(new URL(href, url).toString());
+          } catch (e) {}
+        }
+      });
+
+      return {
+        content: mainContent || 'No content could be extracted',
+        metadata: {
+          title: $('title').text(),
+          description: $('meta[name="description"]').attr('content'),
+          url: url
+        },
+        links: Array.from(links),
+        mediaUrls: Array.from(mediaUrls),
+        data: undefined
+      };
+    } catch (error: any) {
+      console.error('Webpage extraction error:', error);
+      return {
+        content: 'Failed to extract content',
+        metadata: { url, error: error.message },
+        links: [],
+        mediaUrls: [],
+        data: undefined
+      };
+    } finally {
+      await page.close().catch(console.error);
     }
   }
 
-  private formatTranscript(captionText: string): string {
-    return captionText
-      .replace(/<[^>]*>/g, '')  // Remove XML/HTML tags
-      .replace(/\n\n/g, '\n')   // Remove double line breaks
-      .trim();
+  private async getYouTubeCaptions(url: string): Promise<string> {
+    try {
+        const videoId = ytdl.getVideoID(url);
+        const response = await fetch(`http://localhost:3001/transcript/${videoId}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to get transcript');
+        }
+        
+        return data.transcript;
+    } catch (error) {
+        console.error('Error getting captions:', error);
+        return 'No transcript available for this video.';
+    }
   }
 
   private extractLinksFromText(text: string): string[] {
@@ -229,11 +336,14 @@ export class ContentExtractor {
   }
 
   private formatCSVContent(records: any[]): string {
-    return records.map(record => 
-      Object.entries(record)
-        .map(([key, value]) => `${key}: ${value}`)
-        .join(', ')
-    ).join('\n');
+    return records
+        .map(record => 
+            Object.entries(record)
+                .filter(([_, value]) => value !== undefined && value !== null)
+                .map(([key, value]) => `${key}: ${value}`)
+                .join(', ')
+        )
+        .join('\n');
   }
 
   // Helper methods...

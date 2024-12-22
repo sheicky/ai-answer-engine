@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "concurrently \"npm run start:transcript-service\" \"next dev\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "format:fix": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\""
+    "format:fix": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
+    "start:transcript-service": "python src/services/youtube_transcript_service.py"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
@@ -17,6 +18,7 @@
     "csv-parse": "^5.6.0",
     "groq-sdk": "^0.9.0",
     "next": "15.0.4",
+    "papaparse": "^5.4.1",
     "pdf-parse": "^1.1.1",
     "prettier": "^3.4.2",
     "puppeteer": "^23.10.3",
@@ -26,13 +28,16 @@
     "react-syntax-highlighter": "^15.6.1",
     "tesseract.js": "^5.1.1",
     "types": "^0.1.1",
+    "youtube-transcript-api": "^1.1.2",
     "ytdl-core": "^4.11.5"
   },
   "devDependencies": {
     "@types/node": "^20",
+    "@types/papaparse": "^5.3.14",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/react-syntax-highlighter": "^15.5.13",
+    "concurrently": "^8.2.2",
     "eslint": "^8",
     "eslint-config-next": "15.0.4",
     "postcss": "^8",

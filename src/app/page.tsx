@@ -306,7 +306,15 @@ export default function Home() {
                               {children}
                             </code>
                           );
-                        }
+                        },
+                        a: ({ node, ...props }) => (
+                          <a 
+                            {...props} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-blue-500 hover:text-blue-600 underline"
+                          />
+                        )
                       }}
                     >
                       {msg.content}

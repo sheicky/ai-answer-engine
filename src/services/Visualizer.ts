@@ -1,12 +1,21 @@
-import { Chart } from 'chart.js/auto';
-import { ChartConfiguration } from 'chart.js';
+import type { ChartConfiguration } from 'chart.js';
+
+interface ChartData {
+  [key: string]: unknown;
+}
+
+interface ChartOptions {
+  xAxis: string;
+  yAxis?: string;
+  title?: string;
+}
 
 export class Visualizer {
-  generateChart(data: any[], type: 'bar' | 'line' | 'pie' | 'histogram', options: {
-    xAxis: string;
-    yAxis?: string;
-    title?: string;
-  }): ChartConfiguration {
+  generateChart(
+    data: ChartData[], 
+    type: 'bar' | 'line' | 'pie' | 'histogram', 
+    options: ChartOptions
+  ): ChartConfiguration {
     switch (type) {
       case 'bar':
         return this.createBarChart(data, options);
@@ -21,14 +30,14 @@ export class Visualizer {
     }
   }
 
-  private createBarChart(data: any[], options: any): ChartConfiguration {
+  private createBarChart(data: ChartData[], options: ChartOptions): ChartConfiguration {
     return {
       type: 'bar',
       data: {
-        labels: data.map(item => item[options.xAxis]),
+        labels: data.map(item => String(item[options.xAxis])),
         datasets: [{
           label: options.yAxis || '',
-          data: data.map(item => item[options.yAxis || options.xAxis]),
+          data: data.map(item => Number(item[options.yAxis || options.xAxis]) || 0),
           backgroundColor: 'rgba(54, 162, 235, 0.5)',
         }]
       },
@@ -44,14 +53,14 @@ export class Visualizer {
     };
   }
 
-  private createLineChart(data: any[], options: any): ChartConfiguration {
+  private createLineChart(data: ChartData[], options: ChartOptions): ChartConfiguration {
     return {
       type: 'line',
       data: {
-        labels: data.map(item => item[options.xAxis]),
+        labels: data.map(item => String(item[options.xAxis])),
         datasets: [{
           label: options.yAxis || '',
-          data: data.map(item => item[options.yAxis || options.xAxis]),
+          data: data.map(item => Number(item[options.yAxis || options.xAxis]) || 0),
           borderColor: 'rgb(54, 162, 235)',
           tension: 0.1
         }]
@@ -68,13 +77,13 @@ export class Visualizer {
     };
   }
 
-  private createPieChart(data: any[], options: any): ChartConfiguration {
+  private createPieChart(data: ChartData[], options: ChartOptions): ChartConfiguration {
     return {
       type: 'pie',
       data: {
-        labels: data.map(item => item[options.xAxis]),
+        labels: data.map(item => String(item[options.xAxis])),
         datasets: [{
-          data: data.map(item => item[options.yAxis || options.xAxis]),
+          data: data.map(item => Number(item[options.yAxis || options.xAxis]) || 0),
           backgroundColor: [
             'rgba(255, 99, 132, 0.5)',
             'rgba(54, 162, 235, 0.5)',
@@ -94,7 +103,7 @@ export class Visualizer {
     };
   }
 
-  private createHistogram(data: any[], options: any): ChartConfiguration {
+  private createHistogram(data: ChartData[], options: ChartOptions): ChartConfiguration {
     // Implement histogram logic here
     return this.createBarChart(data, options); // Fallback to bar chart for now
   }

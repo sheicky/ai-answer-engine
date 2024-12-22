@@ -108,6 +108,9 @@ export async function POST(req: Request) {
         const result = await extractor.extractFromUrl(url);
         contextFromWeb = result.content;
 
+        // Clean up resources
+        await extractor.close();
+
         // Only generate visualizations if the LLM determines it's useful
         if (result.data && await shouldCreateVisualization(result.content, result.data)) {
           const visualizer = new Visualizer();
@@ -130,11 +133,17 @@ export async function POST(req: Request) {
     
     try {
       const prompt = [
-        `You are a helpful AI assistant. You must always sources the response you're giving.
-        You are a helpful assistant. When providing answers, ensure to cite reliable and verifiable sources. 
-        Use a conventional citation style by referring to sources with numbered references in the text (e.g., [1], [2])
-         and listing the corresponding sources at the end of your response as clickable links. 
-        Do not hesitate to give multiple sources if possible .
+        `You are a helpful AI assistant. When providing answers:
+        1. Always cite sources using numbered references [1], [2], etc.
+        2. Format source links at the end of your response using markdown:
+           [1]: https://example.com "Title of source"
+           [2]: https://another-example.com "Another title"
+        3. Make sure all links are complete URLs (starting with http:// or https://)
+        4. If analyzing a video:
+           - Summarize key points from the transcript
+           - Include relevant quotes when appropriate
+           - Reference video timestamps if available
+        5. If extracting from the provided context, cite it as [Context] and include relevant quotes
         `,
         contextFromWeb ? `Context: ${contextFromWeb}` : "",
         ...messages.map((msg: Message) => `${msg.role}: ${msg.content}`),
@@ -144,6 +153,7 @@ export async function POST(req: Request) {
       const result = await model.generateContent(prompt);
       const response = await result.response;
       
+    
       // Format the response text
       let formattedText = response.text()
         .replace(/```(\w+)\n/g, '```$1\n') // Ensure proper code block formatting

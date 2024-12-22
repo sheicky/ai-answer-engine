@@ -1,8 +1,12 @@
 declare module 'pdf-parse' {
+  interface PDFInfo {
+    [key: string]: string | number | boolean | undefined;
+  }
+
   interface PDFData {
     text: string;
     numpages: number;
-    info: any;
+    info: PDFInfo;
   }
   
   function parse(dataBuffer: Buffer | ArrayBuffer): Promise<PDFData>;
