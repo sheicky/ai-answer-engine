@@ -7,16 +7,9 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
 });
 
-// Define the context type explicitly
-type RouteContext = {
-  params: {
-    id: string;
-  };
-};
-
 export async function DELETE(
   request: NextRequest,
-  context: RouteContext
+  context: { params: { id: string } } & { searchParams: URLSearchParams }
 ) {
   if (!redis) {
     return NextResponse.json({ error: 'Redis not configured' }, { status: 500 });
