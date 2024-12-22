@@ -7,16 +7,23 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
 });
 
+// Define the context type explicitly
+type RouteContext = {
+  params: {
+    id: string;
+  };
+};
+
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }  // Use inline type definition
+  context: RouteContext
 ) {
   if (!redis) {
     return NextResponse.json({ error: 'Redis not configured' }, { status: 500 });
   }
 
   try {
-    const { id } = params;
+    const { id } = context.params;
     
     await Promise.all([
       redis.del(`chat:${id}`),
