@@ -7,21 +7,16 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
 });
 
-// Use the correct type from Next.js
-type Props = {
-  params: { id: string }
-}
-
 export async function DELETE(
   request: NextRequest,
-  props: Props  // Use the Props type here
+  { params }: { params: { id: string } }  // Use inline type definition
 ) {
   if (!redis) {
     return NextResponse.json({ error: 'Redis not configured' }, { status: 500 });
   }
 
   try {
-    const { id } = props.params;
+    const { id } = params;
     
     await Promise.all([
       redis.del(`chat:${id}`),
