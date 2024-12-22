@@ -8,7 +8,7 @@ const redis = new Redis({
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { [key: string]: string } }
 ) {
   if (!redis) {
     return Response.json({ error: 'Redis not configured' }, { status: 500 });
